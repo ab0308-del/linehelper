@@ -1,0 +1,537 @@
+<!-- LINE 小幫手 儀表板 — Apps Script HTML Service -->
+<style>
+  :root {
+    --bg: #f4f6f9;
+    --card: #ffffff;
+    --line: #e3e8ef;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --brand: #2f7d5d;
+    --brand-soft: #e7f3ed;
+    --warn: #c2410c;
+    --warn-soft: #fff2e8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 16px;
+    background: var(--bg); color: var(--text);
+    font-family: "Noto Sans TC", "Microsoft JhengHei", -apple-system, sans-serif;
+    font-size: 15px; line-height: 1.6;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+
+  header { margin-bottom: 16px; }
+  h1 { margin: 0; font-size: 20px; }
+  .date { color: var(--muted); font-size: 14px; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 16px; margin-bottom: 14px;
+  }
+  .card h2 {
+    margin: 0 0 12px; font-size: 15px; font-weight: 700;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .card h2 .n {
+    font-size: 12px; font-weight: 500; color: var(--muted);
+    background: var(--bg); border-radius: 20px; padding: 1px 8px;
+  }
+
+  /* 輸入區 */
+  #entry { display: flex; gap: 8px; }
+  #entry textarea {
+    flex: 1; resize: vertical; min-height: 46px;
+    border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px 12px; font: inherit; color: inherit;
+  }
+  #entry textarea:focus { outline: 2px solid var(--brand); border-color: transparent; }
+  button {
+    border: 0; border-radius: 8px; padding: 10px 18px;
+    background: var(--brand); color: #fff; font: inherit; font-weight: 600;
+    cursor: pointer; white-space: nowrap;
+  }
+  button:disabled { opacity: .5; cursor: default; }
+  .hint { color: var(--muted); font-size: 13px; margin-top: 8px; }
+
+  /* 上傳 */
+  .upload { margin-top: 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .upload input[type=file] { display: none; }
+  .filebtn {
+    border: 1px dashed var(--line); border-radius: 8px; padding: 8px 14px;
+    color: var(--brand); cursor: pointer; font-size: 14px; background: var(--card);
+  }
+  .filebtn:hover { border-color: var(--brand); background: var(--brand-soft); }
+  .attach { color: var(--brand); font-size: 13px; text-decoration: none; }
+  .attach:hover { text-decoration: underline; }
+  #result {
+    margin-top: 12px; padding: 12px; border-radius: 8px;
+    background: var(--brand-soft); font-size: 14px; display: none;
+  }
+  #result.err { background: var(--warn-soft); color: var(--warn); }
+  #result div { margin: 2px 0; }
+
+  /* 兩欄 */
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
+
+  /* 清單 */
+  ul { list-style: none; margin: 0; padding: 0; }
+  li { padding: 9px 0; border-top: 1px solid var(--line); display: flex; gap: 10px; }
+  li:first-child { border-top: 0; }
+  .empty { color: var(--muted); font-size: 14px; padding: 6px 0; }
+
+  .daygroup { margin-top: 10px; }
+  .daygroup:first-child { margin-top: 0; }
+  .dayhead {
+    font-size: 13px; font-weight: 700; color: var(--muted);
+    padding: 6px 0 2px; border-bottom: 1px solid var(--line);
+  }
+  .dayhead.today { color: var(--brand); }
+  .ev-time {
+    font-variant-numeric: tabular-nums; font-size: 13px;
+    color: var(--muted); min-width: 92px;
+  }
+  .ev-loc { color: var(--muted); font-size: 13px; }
+
+  .tk-due {
+    font-size: 12px; padding: 1px 7px; border-radius: 20px;
+    background: var(--bg); color: var(--muted); white-space: nowrap;
+    align-self: flex-start; margin-top: 3px;
+  }
+  .tk-due.overdue { background: var(--warn-soft); color: var(--warn); font-weight: 600; }
+  .tk-due.today { background: var(--brand-soft); color: var(--brand); font-weight: 600; }
+  .tk-check {
+    width: 20px; height: 20px; border: 2px solid var(--line);
+    border-radius: 50%; cursor: pointer; flex: 0 0 auto; margin-top: 3px;
+  }
+  .tk-check:hover { border-color: var(--brand); background: var(--brand-soft); }
+  li.done { opacity: .35; text-decoration: line-through; }
+
+  /* 紀錄 */
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .filters input {
+    flex: 1; min-width: 160px; border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px 10px; font: inherit;
+  }
+  .chip {
+    border: 1px solid var(--line); background: var(--card); color: var(--muted);
+    border-radius: 20px; padding: 4px 12px; font-size: 13px; cursor: pointer;
+  }
+  .chip.on { background: var(--brand); border-color: var(--brand); color: #fff; }
+  .log-time {
+    font-variant-numeric: tabular-nums; font-size: 13px;
+    color: var(--muted); min-width: 78px;
+  }
+  .log-cat {
+    font-size: 12px; padding: 1px 8px; border-radius: 20px;
+    white-space: nowrap; align-self: flex-start; margin-top: 3px;
+  }
+  .log-raw { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .log-body { flex: 1; min-width: 0; }
+
+  /* 教學區 */
+  .today-class {
+    background: var(--brand-soft); border-radius: 8px; padding: 10px 12px;
+    margin-bottom: 12px; font-size: 14px;
+  }
+  .today-class b { color: var(--brand); }
+  .cls-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 760px) { .cls-grid { grid-template-columns: 1fr; } }
+  .cls {
+    border: 1px solid var(--line); border-radius: 10px; padding: 12px;
+  }
+  .cls h3 { margin: 0 0 4px; font-size: 15px; }
+  .cls .slots { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+  .cls textarea {
+    width: 100%; border: 1px solid var(--line); border-radius: 6px;
+    padding: 7px 9px; font: inherit; font-size: 14px; resize: vertical;
+    min-height: 40px; margin-bottom: 6px;
+  }
+  .cls label { font-size: 12px; color: var(--muted); }
+  .cls .row { display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
+  .cls button { padding: 5px 14px; font-size: 13px; }
+  .saved { color: var(--brand); font-size: 12px; }
+
+  /* 校內行事曆 */
+  .dept { margin-bottom: 12px; }
+  .dept-name {
+    font-size: 13px; font-weight: 700; color: var(--brand);
+    padding-bottom: 4px; border-bottom: 1px solid var(--line); margin-bottom: 4px;
+  }
+  .dept li { border: 0; padding: 4px 0; font-size: 14px; }
+
+  .loading { text-align: center; color: var(--muted); padding: 40px 0; }
+  .foot { text-align: center; color: var(--muted); font-size: 13px; padding: 8px 0 24px; }
+  .foot a { color: var(--brand); }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1 id="name">LINE 小幫手</h1>
+    <div class="date" id="today">載入中…</div>
+  </header>
+
+  <div class="card">
+    <h2>✍️ 隨手記</h2>
+    <div id="entry">
+      <textarea id="text" placeholder="例如：下週三下午兩點在會議室開領域會議，記得先印好資料"></textarea>
+      <button id="send" onclick="送出()">送出</button>
+    </div>
+    <div class="hint">跟 LINE 一樣，會自動判斷要記錄、開行程還是加待辦。Ctrl + Enter 也可送出。</div>
+
+    <div class="upload">
+      <label class="filebtn" for="file">📎 上傳照片或 PDF</label>
+      <input type="file" id="file" accept="image/*,application/pdf" onchange="上傳()">
+      <span class="hint" style="margin:0">公文、通知單、研習海報都可以，小幫手會讀出內容。建議 5MB 以下。</span>
+    </div>
+
+    <div id="result"></div>
+  </div>
+
+  <div id="main" class="loading">載入中…</div>
+
+  <div class="foot">
+    <a href="#" onclick="重新載入();return false;">🔄 重新整理</a>
+  </div>
+</div>
+
+<script>
+  var 資料 = null;
+  var 篩選分類 = '';
+  var 關鍵字 = '';
+
+  var 色表 = {
+    '教學': ['#e8f0fe', '#1a56c4'], '行政': ['#f3e8fd', '#6b21a8'],
+    '學生': ['#e7f6ec', '#166534'], '會議': ['#fff2e8', '#c2410c'],
+    '個人': ['#fde8f0', '#9d174d'], '其他': ['#eef0f3', '#4b5563']
+  };
+  function 配色(c) { return 色表[c] || 色表['其他']; }
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (m) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m];
+    });
+  }
+
+  /* ---------- 載入 ---------- */
+  function 重新載入() {
+    google.script.run
+      .withSuccessHandler(function (d) { 資料 = d; 畫面(); })
+      .withFailureHandler(function (e) {
+        document.getElementById('main').className = '';
+        document.getElementById('main').innerHTML =
+          '<div class="card"><b>載入失敗</b><div class="hint">' + esc(e.message) + '</div></div>';
+      })
+      .getDashboardData();
+  }
+
+  function 畫面() {
+    document.getElementById('today').textContent = 資料.today;
+    if (資料.name) document.getElementById('name').textContent = 資料.name;
+    document.getElementById('main').className = '';
+    document.getElementById('main').innerHTML =
+      教學區() + '<div class="cols">' + 行程區() + 待辦區() + '</div>' +
+      校內區() + 統計區() + 紀錄區();
+    綁定紀錄事件();
+  }
+
+  /* ---------- 本週自然科 ---------- */
+  function 教學區() {
+    var t = 資料.teaching;
+    if (!t) return '';
+
+    var h = '<div class="card"><h2>🔬 本週教學 <span class="n">' + esc(t.週標) + '</span></h2>';
+
+    if (t.今日 && t.今日.length) {
+      var s = t.今日.map(function (c) {
+        return c.節次 + ' ' + c.時間 + ' <b>' + esc(c.班級) + '</b>';
+      }).join('　｜　');
+      h += '<div class="today-class">今天：' + s + '</div>';
+    } else {
+      h += '<div class="today-class">今天沒有課 ☕</div>';
+    }
+
+    h += '<div class="cls-grid">';
+    t.班級.forEach(function (b, i) {
+      h += '<div class="cls">' +
+        '<h3>' + esc(b.班級) + '</h3>' +
+        '<div class="slots">' + esc(b.節次.join('　')) + '</div>' +
+        '<label>本週進度</label>' +
+        '<textarea id="p_' + i + '" placeholder="例如：第二單元 水的三態，做完蒸發實驗">' +
+        esc(b.進度) + '</textarea>' +
+        '<label>注意事項</label>' +
+        '<textarea id="n_' + i + '" placeholder="例如：小翔請假要補實驗、第三組器材要補充">' +
+        esc(b.注意事項) + '</textarea>' +
+        '<div class="row"><span class="saved" id="s_' + i + '"></span>' +
+        '<button data-cls="' + esc(b.班級) + '" data-i="' + i + '" class="savebtn">儲存</button></div>' +
+        '</div>';
+    });
+    return h + '</div></div>';
+  }
+
+  function 存進度(班級, i) {
+    var 進度 = document.getElementById('p_' + i).value;
+    var 注意 = document.getElementById('n_' + i).value;
+    var tag = document.getElementById('s_' + i);
+    tag.textContent = '儲存中…';
+
+    google.script.run
+      .withSuccessHandler(function () {
+        tag.textContent = '✓ 已儲存';
+        setTimeout(function () { tag.textContent = ''; }, 2500);
+      })
+      .withFailureHandler(function (e) { tag.textContent = '✗ ' + e.message; })
+      .saveProgress(班級, 進度, 注意);
+  }
+
+  /* ---------- 本週校內行事曆 ---------- */
+  function 校內區() {
+    var s = 資料.school;
+    if (!s) return '';
+
+    var h = '<div class="card"><h2>🏫 本週校內行事曆 <span class="n">' +
+            esc(s.週標) + (s.週次 ? '　第' + esc(s.週次) + '週' : '') + '</span></h2>';
+
+    if (!s.筆數) return h + '<div class="empty">這週沒有登記的校內事項</div></div>';
+
+    Object.keys(s.分組).forEach(function (處) {
+      h += '<div class="dept"><div class="dept-name">' + esc(處) + '</div><ul>';
+      s.分組[處].forEach(function (x) { h += '<li>• ' + esc(x) + '</li>'; });
+      h += '</ul></div>';
+    });
+    return h + '</div>';
+  }
+
+  /* ---------- 行程 ---------- */
+  function 行程區() {
+    var evs = 資料.events || [];
+    var h = '<div class="card"><h2>📅 未來 7 天行程 <span class="n">' + evs.length + '</span></h2>';
+
+    if (!evs.length) {
+      return h + '<div class="empty">這週還沒有排定的行程</div></div>';
+    }
+
+    var 目前日 = '';
+    evs.forEach(function (e) {
+      if (e.date !== 目前日) {
+        if (目前日) h += '</ul></div>';
+        h += '<div class="daygroup"><div class="dayhead' + (e.isToday ? ' today' : '') + '">' +
+             esc(e.dateLabel) + (e.isToday ? ' · 今天' : '') + '</div><ul>';
+        目前日 = e.date;
+      }
+      h += '<li><span class="ev-time">' + esc(e.time) + '</span><span>' + esc(e.title) +
+           (e.location ? ' <span class="ev-loc">@' + esc(e.location) + '</span>' : '') +
+           '</span></li>';
+    });
+    return h + '</ul></div></div>';
+  }
+
+  /* ---------- 待辦 ---------- */
+  function 待辦區() {
+    var ts = 資料.tasks || [];
+    var h = '<div class="card"><h2>✅ 待辦 <span class="n">' + ts.length + '</span></h2>';
+
+    if (!ts.length) return h + '<div class="empty">沒有待處理的事項 🎉</div></div>';
+
+    h += '<ul>';
+    ts.forEach(function (t) {
+      var 標籤 = '';
+      if (t.overdue) 標籤 = '<span class="tk-due overdue">逾期 ' + esc(t.dueLabel) + '</span>';
+      else if (t.today) 標籤 = '<span class="tk-due today">今天</span>';
+      else if (t.dueLabel) 標籤 = '<span class="tk-due">' + esc(t.dueLabel) + '</span>';
+
+      h += '<li id="t_' + esc(t.id) + '">' +
+           '<span class="tk-check" data-id="' + esc(t.id) + '" title="標記完成"></span>' +
+           '<span style="flex:1">' + esc(t.title) + '</span>' + 標籤 + '</li>';
+    });
+    return h + '</ul></div>';
+  }
+
+  function 勾掉(id) {
+    var li = document.getElementById('t_' + id);
+    if (li) li.className = 'done';
+    google.script.run
+      .withSuccessHandler(function () { 重新載入(); })
+      .withFailureHandler(function (e) {
+        if (li) li.className = '';
+        alert('標記失敗：' + e.message);
+      })
+      .completeTask(id);
+  }
+
+  /* ---------- 統計 ---------- */
+  function 統計區() {
+    var st = 資料.stats || [];
+    if (!st.length) return '';
+    var 總 = st.reduce(function (a, b) { return a + b.count; }, 0);
+
+    var h = '<div class="card"><h2>📊 近 30 天分類 <span class="n">共 ' + 總 + ' 則</span></h2>' +
+            '<div style="display:flex;gap:8px;flex-wrap:wrap">';
+    st.forEach(function (s) {
+      var c = 配色(s.category);
+      h += '<span class="log-cat" style="background:' + c[0] + ';color:' + c[1] +
+           ';font-size:13px;padding:4px 12px;margin:0">' + esc(s.category) + ' ' + s.count + '</span>';
+    });
+    return h + '</div></div>';
+  }
+
+  /* ---------- 紀錄 ---------- */
+  function 紀錄區() {
+    var 分類 = {};
+    (資料.logs || []).forEach(function (l) { 分類[l.category] = 1; });
+
+    var h = '<div class="card"><h2>📝 所有紀錄 <span class="n" id="logcount"></span></h2>' +
+            '<div class="filters"><input id="q" placeholder="搜尋紀錄內容…" value="' + esc(關鍵字) + '">' +
+            '<span class="chip' + (篩選分類 === '' ? ' on' : '') + '" data-cat="">全部</span>';
+    Object.keys(分類).forEach(function (c) {
+      h += '<span class="chip' + (篩選分類 === c ? ' on' : '') + '" data-cat="' + esc(c) + '">' +
+           esc(c) + '</span>';
+    });
+    return h + '</div><ul id="loglist"></ul></div>';
+  }
+
+  function 綁定紀錄事件() {
+    var q = document.getElementById('q');
+    if (q) q.oninput = function () { 關鍵字 = this.value; 畫紀錄(); };
+
+    Array.prototype.forEach.call(document.querySelectorAll('.chip'), function (el) {
+      el.onclick = function () {
+        篩選分類 = this.getAttribute('data-cat');
+        Array.prototype.forEach.call(document.querySelectorAll('.chip'), function (x) {
+          x.className = 'chip' + (x.getAttribute('data-cat') === 篩選分類 ? ' on' : '');
+        });
+        畫紀錄();
+      };
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll('.tk-check'), function (el) {
+      el.onclick = function () { 勾掉(this.getAttribute('data-id')); };
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll('.savebtn'), function (el) {
+      el.onclick = function () {
+        存進度(this.getAttribute('data-cls'), this.getAttribute('data-i'));
+      };
+    });
+
+    畫紀錄();
+  }
+
+  function 畫紀錄() {
+    var kw = 關鍵字.trim().toLowerCase();
+    var list = (資料.logs || []).filter(function (l) {
+      if (篩選分類 && l.category !== 篩選分類) return false;
+      if (!kw) return true;
+      return (l.summary + ' ' + l.raw).toLowerCase().indexOf(kw) >= 0;
+    });
+
+    document.getElementById('logcount').textContent = list.length + ' 則';
+
+    if (!list.length) {
+      document.getElementById('loglist').innerHTML = '<div class="empty">沒有符合的紀錄</div>';
+      return;
+    }
+
+    var h = '';
+    list.forEach(function (l) {
+      var c = 配色(l.category);
+      var 補充 = (l.raw && l.raw !== l.summary) ?
+        '<div class="log-raw">' + esc(l.raw) + '</div>' : '';
+      var 附件 = l.link ?
+        '<div><a class="attach" href="' + esc(l.link) + '" target="_blank">📎 開啟附件</a></div>' : '';
+      h += '<li><span class="log-time">' + esc(l.time) + '</span>' +
+           '<span class="log-cat" style="background:' + c[0] + ';color:' + c[1] + '">' +
+           esc(l.category) + '</span>' +
+           '<span class="log-body">' + esc(l.summary) + 補充 + 附件 + '</span></li>';
+    });
+    document.getElementById('loglist').innerHTML = h;
+  }
+
+  /* ---------- 送出 ---------- */
+  function 送出() {
+    var ta = document.getElementById('text');
+    var btn = document.getElementById('send');
+    var box = document.getElementById('result');
+    var 內容 = ta.value.trim();
+    if (!內容) { ta.focus(); return; }
+
+    btn.disabled = true;
+    btn.textContent = '處理中…';
+    box.style.display = 'block';
+    box.className = '';
+    box.innerHTML = '正在請小幫手判斷…';
+
+    google.script.run
+      .withSuccessHandler(function (r) {
+        btn.disabled = false; btn.textContent = '送出';
+        ta.value = '';
+        var h = '<div><b>📝 已記錄：</b>' + esc(r.summary) + '（' + esc(r.category) + '）</div>';
+        (r.actions || []).forEach(function (a) { h += '<div>' + esc(a) + '</div>'; });
+        if (r.reply) h += '<div style="margin-top:6px;color:#4b5563">' + esc(r.reply) + '</div>';
+        box.innerHTML = h;
+        重新載入();
+      })
+      .withFailureHandler(function (e) {
+        btn.disabled = false; btn.textContent = '送出';
+        box.className = 'err';
+        box.innerHTML = '⚠️ ' + esc(e.message);
+      })
+      .submitEntry(內容);
+  }
+
+  /* ---------- 上傳照片／PDF ---------- */
+  function 上傳() {
+    var input = document.getElementById('file');
+    var box = document.getElementById('result');
+    var f = input.files && input.files[0];
+    if (!f) return;
+
+    if (f.size > 8 * 1024 * 1024) {
+      box.style.display = 'block';
+      box.className = 'err';
+      box.innerHTML = '⚠️ 檔案太大了（' + Math.round(f.size / 1048576) + 'MB），請壓縮到 8MB 以下。';
+      input.value = '';
+      return;
+    }
+
+    box.style.display = 'block';
+    box.className = '';
+    box.innerHTML = '正在上傳並閱讀「' + esc(f.name) + '」…（檔案較大時要等一下）';
+
+    var reader = new FileReader();
+    reader.onload = function () {
+      var b64 = reader.result.split(',')[1];
+      var 附註 = document.getElementById('text').value.trim();
+
+      google.script.run
+        .withSuccessHandler(function (r) {
+          input.value = '';
+          document.getElementById('text').value = '';
+          var h = '<div><b>📝 已記錄：</b>' + esc(r.summary) + '（' + esc(r.category) + '）</div>';
+          (r.actions || []).forEach(function (a) { h += '<div>' + esc(a) + '</div>'; });
+          if (r.link) h += '<div><a class="attach" href="' + esc(r.link) +
+                           '" target="_blank">📎 開啟剛存的檔案</a></div>';
+          if (r.reply) h += '<div style="margin-top:6px;color:#4b5563">' + esc(r.reply) + '</div>';
+          box.innerHTML = h;
+          重新載入();
+        })
+        .withFailureHandler(function (e) {
+          input.value = '';
+          box.className = 'err';
+          box.innerHTML = '⚠️ ' + esc(e.message);
+        })
+        .submitMedia(b64, f.type, f.name, 附註);
+    };
+    reader.onerror = function () {
+      box.className = 'err';
+      box.innerHTML = '⚠️ 讀取檔案失敗';
+    };
+    reader.readAsDataURL(f);
+  }
+
+  document.getElementById('text').addEventListener('keydown', function (e) {
+    if (e.ctrlKey && e.key === 'Enter') 送出();
+  });
+
+  重新載入();
+</script>

@@ -1,0 +1,21 @@
+# 絕對不要上傳的東西
+*.key
+.env
+.clasp.json
+credentials.json
+
+# 你自己的資料（用範例檔當範本，別把真實資料 commit 上來）
+學校行事曆.csv
+課表.csv
+我的*
+private/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 系統
+.DS_Store
+Thumbs.db
