@@ -91,12 +91,12 @@ function 組出每日簡報_(基準日) {
 
   /* 今日課表 */
   try {
-    var 教學 = 取得教學面板_();
-    if (教學 && 教學.今日.length) {
+    var 課 = 當日課表_(起);
+    if (課.length) {
       行.push('');
-      行.push('🔬 今天的' + 教學科目 + '課');
-      教學.今日.forEach(function (c) {
-        行.push('　• ' + c.節次 + ' ' + c.時間 + '　' + c.班級);
+      行.push('🔬 ' + 格式化_(起, 'M/d') + ' 的課');
+      課.forEach(function (c) {
+        行.push('　• 第' + c.節次 + '節 ' + c.開始 + '–' + c.結束 + '　' + c.班級);
       });
     }
   } catch (err) { 除錯紀錄_('每日簡報課表', err.message || err); }
@@ -112,5 +112,63 @@ function 組出每日簡報_(基準日) {
 
   行.push('');
   行.push('今天也順順的 💪');
+  return 行.join('\n');
+}
+
+
+/** 指定某一天的課表（每日簡報和區間查詢共用） */
+function 當日課表_(日期) {
+  var 星期 = 日期.getDay();
+  return 讀取課表_()
+    .filter(function (c) { return c.星期 === 星期; })
+    .sort(function (a, b) { return a.節次 - b.節次; });
+}
+
+
+/**
+ * 查詢一段期間的行程。
+ * 同一天就直接給每日簡報，跨多天則列出各天的行事曆。
+ */
+function 組出區間行程_(起, 訖) {
+  if (格式化_(起, 'yyyy-MM-dd') === 格式化_(訖, 'yyyy-MM-dd')) {
+    return 組出每日簡報_(起);
+  }
+
+  var 開始 = new Date(起.getFullYear(), 起.getMonth(), 起.getDate());
+  var 結束 = new Date(訖.getFullYear(), 訖.getMonth(), 訖.getDate() + 1);
+
+  var cal = CalendarApp.getCalendarById(cfg_('CALENDAR_ID', 'primary')) ||
+            CalendarApp.getDefaultCalendar();
+  var events = cal.getEvents(開始, 結束);
+
+  var 行 = ['🗓 ' + 格式化_(開始, 'M/d') + ' ~ ' + 格式化_(訖, 'M/d') + ' 的行程'];
+
+  if (!events.length) {
+    行.push('　（這段期間沒有排定行程）');
+  } else {
+    var 目前日 = '';
+    events.forEach(function (ev) {
+      var d = 格式化_(ev.getStartTime(), 'yyyy-MM-dd');
+      if (d !== 目前日) {
+        行.push('');
+        行.push('▎' + 格式化_(ev.getStartTime(), 'M/d (EEE)'));
+        目前日 = d;
+      }
+      var 時間 = ev.isAllDayEvent() ? '全天' :
+        格式化_(ev.getStartTime(), 'HH:mm') + '–' + 格式化_(ev.getEndTime(), 'HH:mm');
+      行.push('　• ' + 時間 + '　' + ev.getTitle());
+    });
+  }
+
+  /* 這段期間的校內事項 */
+  try {
+    var 校內 = 讀取學校行事曆_(開始, 訖, 推播處室);
+    if (校內.length) {
+      行.push('');
+      行.push('🏫 校內');
+      校內.forEach(function (r) { 行.push('　• ' + r.處室 + '：' + r.事項); });
+    }
+  } catch (err) { 除錯紀錄_('區間校內', err.message || err); }
+
   return 行.join('\n');
 }

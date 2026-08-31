@@ -8,16 +8,17 @@
 /**
  * 要用的 Gemini 模型。
  * 實測（2026/08）：
- *   gemini-3.5-flash-lite  1.2 秒，判斷準確 ← 目前採用
+ *   gemini-3.5-flash       較聪明，稍慢 ← 預設
+ *   gemini-3.5-flash-lite  快很多但較不聪明（預設備援）
  *   gemini-3.1-flash-lite  4.6 秒，判斷準確
  *   gemini-3.6-flash       常回 503（需求量過高）
  *   gemini-2.5-flash       已不開放給新使用者，會 404
  * 不確定該填什麼就執行「測試模型速度」重新比一次。
  */
-var GEMINI_MODEL = 'gemini-3.5-flash-lite';
+var GEMINI_MODEL = 'gemini-3.5-flash';
 
 /** 備援模型：主模型塞車（503）或出錯時自動換這個重試一次 */
-var GEMINI_MODEL_備援 = 'gemini-3.1-flash-lite';
+var GEMINI_MODEL_備援 = 'gemini-3.5-flash-lite';
 
 /** 每天主動推播的時間（24 小時制，只取整點的區間，7 代表 7:00~8:00 之間） */
 var DAILY_PUSH_HOUR = 7;

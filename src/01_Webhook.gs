@@ -112,7 +112,9 @@ function 處理事件_(event) {
     return;
   }
   if (結果.intent === '問行程') {
-    lineReply_(event.replyToken, 組出每日簡報_(new Date()));
+    var 起 = 解析時間_(結果.查詢起日) || new Date();
+    var 訖 = 解析時間_(結果.查詢訖日) || 起;
+    lineReply_(event.replyToken, 組出區間行程_(起, 訖));
     return;
   }
 

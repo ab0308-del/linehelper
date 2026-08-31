@@ -22,16 +22,17 @@
 /**
  * 要用的 Gemini 模型。
  * 實測（2026/08）：
- *   gemini-3.5-flash-lite  1.2 秒，判斷準確 ← 目前採用
+ *   gemini-3.5-flash       較聪明，稍慢 ← 預設
+ *   gemini-3.5-flash-lite  快很多但較不聪明（預設備援）
  *   gemini-3.1-flash-lite  4.6 秒，判斷準確
  *   gemini-3.6-flash       常回 503（需求量過高）
  *   gemini-2.5-flash       已不開放給新使用者，會 404
  * 不確定該填什麼就執行「測試模型速度」重新比一次。
  */
-var GEMINI_MODEL = 'gemini-3.5-flash-lite';
+var GEMINI_MODEL = 'gemini-3.5-flash';
 
 /** 備援模型：主模型塞車（503）或出錯時自動換這個重試一次 */
-var GEMINI_MODEL_備援 = 'gemini-3.1-flash-lite';
+var GEMINI_MODEL_備援 = 'gemini-3.5-flash-lite';
 
 /** 每天主動推播的時間（24 小時制，只取整點的區間，7 代表 7:00~8:00 之間） */
 var DAILY_PUSH_HOUR = 7;
@@ -231,7 +232,9 @@ function 處理事件_(event) {
     return;
   }
   if (結果.intent === '問行程') {
-    lineReply_(event.replyToken, 組出每日簡報_(new Date()));
+    var 起 = 解析時間_(結果.查詢起日) || new Date();
+    var 訖 = 解析時間_(結果.查詢訖日) || 起;
+    lineReply_(event.replyToken, 組出區間行程_(起, 訖));
     return;
   }
 
@@ -309,7 +312,9 @@ function 問Gemini_(文字, 媒體, 模型) {
     '第一步，先判斷這句話是「交代事情」還是「問問題」，填入 intent：',
     '- 問學校活動、考試、放假、會議、研習什麼時候 → 問學校',
     '  （例：期中考什麼時候、家長日哪一天、下週學校有什麼事）',
-    '- 問自己的行程、待辦、今天明天要做什麼 → 問行程',
+    '- 問自己的行程、待辦、某一天或某段期間要做什麼 → 問行程',
+    '  這時候一定要把使用者問的日期換算成 yyyy-MM-dd 填進 查詢起日 與 查詢訖日。',
+    '  問單一天兩個填一樣；問一段期間就填起訖；沒指定就填今天。',
     '- 其他（交代事情、隨手記下來） → 記錄',
     '- intent 不是 記錄 時，actions 一定要留空陣列，不要建行程或待辦。',
     '',
@@ -354,6 +359,8 @@ function 問Gemini_(文字, 媒體, 模型) {
         properties: {
           intent: { type: 'STRING', enum: ['記錄', '問學校', '問行程'] },
           transcript: { type: 'STRING' },
+          查詢起日: { type: 'STRING' },
+          查詢訖日: { type: 'STRING' },
           summary: { type: 'STRING' },
           category: { type: 'STRING' },
           reply: { type: 'STRING' },
@@ -529,9 +536,9 @@ function 測試思考等級() {
  */
 function 測試模型速度() {
   var 候選 = [
-    'gemini-3.6-flash',
+    'gemini-3.5-flash',
     'gemini-3.5-flash-lite',
-    'gemini-3.1-flash-lite',
+    'gemini-flash-latest',
     'gemini-flash-lite-latest'
   ];
 
@@ -968,12 +975,12 @@ function 組出每日簡報_(基準日) {
 
   /* 今日課表 */
   try {
-    var 教學 = 取得教學面板_();
-    if (教學 && 教學.今日.length) {
+    var 課 = 當日課表_(起);
+    if (課.length) {
       行.push('');
-      行.push('🔬 今天的' + 教學科目 + '課');
-      教學.今日.forEach(function (c) {
-        行.push('　• ' + c.節次 + ' ' + c.時間 + '　' + c.班級);
+      行.push('🔬 ' + 格式化_(起, 'M/d') + ' 的課');
+      課.forEach(function (c) {
+        行.push('　• 第' + c.節次 + '節 ' + c.開始 + '–' + c.結束 + '　' + c.班級);
       });
     }
   } catch (err) { 除錯紀錄_('每日簡報課表', err.message || err); }
@@ -989,6 +996,64 @@ function 組出每日簡報_(基準日) {
 
   行.push('');
   行.push('今天也順順的 💪');
+  return 行.join('\n');
+}
+
+
+/** 指定某一天的課表（每日簡報和區間查詢共用） */
+function 當日課表_(日期) {
+  var 星期 = 日期.getDay();
+  return 讀取課表_()
+    .filter(function (c) { return c.星期 === 星期; })
+    .sort(function (a, b) { return a.節次 - b.節次; });
+}
+
+
+/**
+ * 查詢一段期間的行程。
+ * 同一天就直接給每日簡報，跨多天則列出各天的行事曆。
+ */
+function 組出區間行程_(起, 訖) {
+  if (格式化_(起, 'yyyy-MM-dd') === 格式化_(訖, 'yyyy-MM-dd')) {
+    return 組出每日簡報_(起);
+  }
+
+  var 開始 = new Date(起.getFullYear(), 起.getMonth(), 起.getDate());
+  var 結束 = new Date(訖.getFullYear(), 訖.getMonth(), 訖.getDate() + 1);
+
+  var cal = CalendarApp.getCalendarById(cfg_('CALENDAR_ID', 'primary')) ||
+            CalendarApp.getDefaultCalendar();
+  var events = cal.getEvents(開始, 結束);
+
+  var 行 = ['🗓 ' + 格式化_(開始, 'M/d') + ' ~ ' + 格式化_(訖, 'M/d') + ' 的行程'];
+
+  if (!events.length) {
+    行.push('　（這段期間沒有排定行程）');
+  } else {
+    var 目前日 = '';
+    events.forEach(function (ev) {
+      var d = 格式化_(ev.getStartTime(), 'yyyy-MM-dd');
+      if (d !== 目前日) {
+        行.push('');
+        行.push('▎' + 格式化_(ev.getStartTime(), 'M/d (EEE)'));
+        目前日 = d;
+      }
+      var 時間 = ev.isAllDayEvent() ? '全天' :
+        格式化_(ev.getStartTime(), 'HH:mm') + '–' + 格式化_(ev.getEndTime(), 'HH:mm');
+      行.push('　• ' + 時間 + '　' + ev.getTitle());
+    });
+  }
+
+  /* 這段期間的校內事項 */
+  try {
+    var 校內 = 讀取學校行事曆_(開始, 訖, 推播處室);
+    if (校內.length) {
+      行.push('');
+      行.push('🏫 校內');
+      校內.forEach(function (r) { 行.push('　• ' + r.處室 + '：' + r.事項); });
+    }
+  } catch (err) { 除錯紀錄_('區間校內', err.message || err); }
+
   return 行.join('\n');
 }
 

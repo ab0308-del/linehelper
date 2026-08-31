@@ -42,7 +42,9 @@ function 問Gemini_(文字, 媒體, 模型) {
     '第一步，先判斷這句話是「交代事情」還是「問問題」，填入 intent：',
     '- 問學校活動、考試、放假、會議、研習什麼時候 → 問學校',
     '  （例：期中考什麼時候、家長日哪一天、下週學校有什麼事）',
-    '- 問自己的行程、待辦、今天明天要做什麼 → 問行程',
+    '- 問自己的行程、待辦、某一天或某段期間要做什麼 → 問行程',
+    '  這時候一定要把使用者問的日期換算成 yyyy-MM-dd 填進 查詢起日 與 查詢訖日。',
+    '  問單一天兩個填一樣；問一段期間就填起訖；沒指定就填今天。',
     '- 其他（交代事情、隨手記下來） → 記錄',
     '- intent 不是 記錄 時，actions 一定要留空陣列，不要建行程或待辦。',
     '',
@@ -87,6 +89,8 @@ function 問Gemini_(文字, 媒體, 模型) {
         properties: {
           intent: { type: 'STRING', enum: ['記錄', '問學校', '問行程'] },
           transcript: { type: 'STRING' },
+          查詢起日: { type: 'STRING' },
+          查詢訖日: { type: 'STRING' },
           summary: { type: 'STRING' },
           category: { type: 'STRING' },
           reply: { type: 'STRING' },
@@ -262,9 +266,9 @@ function 測試思考等級() {
  */
 function 測試模型速度() {
   var 候選 = [
-    'gemini-3.6-flash',
+    'gemini-3.5-flash',
     'gemini-3.5-flash-lite',
-    'gemini-3.1-flash-lite',
+    'gemini-flash-latest',
     'gemini-flash-lite-latest'
   ];
 
