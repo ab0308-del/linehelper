@@ -235,7 +235,7 @@
     綁定紀錄事件();
   }
 
-  /* ---------- 本週自然科 ---------- */
+  /* ---------- 本週教學 ---------- */
   function 教學區() {
     var t = 資料.teaching;
     if (!t) return '';
@@ -276,9 +276,9 @@
     tag.textContent = '儲存中…';
 
     google.script.run
-      .withSuccessHandler(function () {
-        tag.textContent = '✓ 已儲存';
-        setTimeout(function () { tag.textContent = ''; }, 2500);
+      .withSuccessHandler(function (msg) {
+        tag.textContent = '✓ ' + (msg || '已儲存');
+        setTimeout(function () { tag.textContent = ''; }, 6000);
       })
       .withFailureHandler(function (e) { tag.textContent = '✗ ' + e.message; })
       .saveProgress(班級, 進度, 注意);

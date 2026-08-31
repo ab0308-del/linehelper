@@ -217,7 +217,7 @@ function 處理事件_(event) {
     lineReply_(event.replyToken, 組出校內行事曆文字_(new Date(), true));
     return;
   }
-  if (輸入文字 && /^(課表|今天課表|自然課)$/.test(輸入文字.trim())) {
+  if (輸入文字 && /^(課表|今天課表|今日課表)$/.test(輸入文字.trim())) {
     lineReply_(event.replyToken, 組出今日課表_());
     return;
   }
@@ -966,7 +966,7 @@ function 組出每日簡報_(基準日) {
     行.push('　（讀取待辦失敗：' + (err.message || err) + '）');
   }
 
-  /* 今日自然課 */
+  /* 今日課表 */
   try {
     var 教學 = 取得教學面板_();
     if (教學 && 教學.今日.length) {
@@ -1245,7 +1245,7 @@ function submitMedia(b64, mimeType, name, note) {
 // ==================================================================
 
 /**
- * LINE 小幫手 — 自然科教學模組
+ * LINE 小幫手 — 教學模組
  * 課表、每週教學進度、教學專用日曆
  */
 
@@ -1263,10 +1263,7 @@ var 節次時間 = {
   7: ['14:50', '15:30']
 };
 
-/**
- * 課表範例：[星期(1=一), 節次, 班級]
- * 請改成你自己的課表，或執行「建立課表」後直接在試算表的「課表」分頁編輯。
- */
+/** 課表：[星期(1=一), 節次, 班級] */
 var 預設課表 = [
   [1, 1, '三年一班'], [1, 2, '三年二班'],
   [3, 3, '三年一班'], [3, 4, '三年二班'],
@@ -1326,11 +1323,30 @@ function 讀取課表_() {
       return {
         星期: Number(r[0]),
         節次: Number(r[1]),
-        開始: String(r[2]),
-        結束: String(r[3]),
+        開始: 時間字串_(r[2]),
+        結束: 時間字串_(r[3]),
         班級: String(r[4])
       };
     });
+}
+
+/**
+ * 課表的時間欄可能是文字「10:20」，也可能被試算表自動轉成時間值
+ * （內部會變成 1899/12/30 那天的日期物件），兩種都要能讀。
+ */
+function 時間字串_(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone() || 'Asia/Taipei', 'HH:mm');
+  var s = String(v).trim();
+  var m = s.match(/(\d{1,2}):(\d{2})/);
+  return m ? (('0' + m[1]).slice(-2) + ':' + m[2]) : s;
+}
+
+/** 把「某一天」跟「HH:mm」組成完整的時間 */
+function 合成時間_(日期, 時分) {
+  var m = String(時分).match(/(\d{1,2}):(\d{2})/);
+  var d = new Date(日期.getFullYear(), 日期.getMonth(), 日期.getDate());
+  if (m) d.setHours(Number(m[1]), Number(m[2]), 0, 0);
+  return d;
 }
 
 /** 取得某天是哪一週的週一 */
@@ -1411,12 +1427,67 @@ function saveProgress(班級, 進度, 注意事項) {
       var d = (值[i][0] instanceof Date) ? 格式化_(值[i][0], 'yyyy-MM-dd') : String(值[i][0]);
       if (d === 週一字串 && String(值[i][1]) === 班級) {
         sh.getRange(i + 2, 3, 1, 3).setValues([[進度 || '', 注意事項 || '', new Date()]]);
-        return true;
+        return 同步進度到日曆_(班級, 進度, 注意事項);
       }
     }
   }
   sh.appendRow([週一字串, 班級, 進度 || '', 注意事項 || '', new Date()]);
-  return true;
+  return 同步進度到日曆_(班級, 進度, 注意事項);
+}
+
+
+/**
+ * 把本週進度寫成教學日曆上的事件，每一節課一個。
+ * 會先刪掉這個班本週先前同步過的事件，所以重複儲存不會長出一堆重複的。
+ */
+var 同步標記 = '[小幫手進度同步]';
+
+function 同步進度到日曆_(班級, 進度, 注意事項) {
+  var calId = cfg_('CALENDAR_ID_TEACH');
+  if (!calId) return '已儲存（還沒設定教學日曆，沒有同步）';
+
+  var cal = CalendarApp.getCalendarById(calId);
+  if (!cal) return '已儲存（找不到教學日曆，沒有同步）';
+
+  var 週一 = 本週週一_(new Date());
+  var 週末 = new Date(週一.getTime() + 7 * 86400000);
+
+  // 先清掉舊的，避免重複
+  var 刪除數 = 0;
+  cal.getEvents(週一, 週末).forEach(function (ev) {
+    if ((ev.getDescription() || '').indexOf(同步標記) >= 0 &&
+        ev.getTitle().indexOf(班級) === 0) {
+      ev.deleteEvent();
+      刪除數++;
+    }
+  });
+
+  進度 = String(進度 || '').trim();
+  注意事項 = String(注意事項 || '').trim();
+  if (!進度 && !注意事項) {
+    return 刪除數 ? '已清空，日曆上的 ' + 刪除數 + ' 筆也移除了' : '已清空';
+  }
+
+  var 說明 = [];
+  if (進度) 說明.push('進度：' + 進度);
+  if (注意事項) 說明.push('注意：' + 注意事項);
+  說明.push('');
+  說明.push(同步標記 + '（由儀表板自動建立，直接改儀表板即可更新）');
+
+  var 建立數 = 0;
+  讀取課表_().forEach(function (c) {
+    if (c.班級 !== 班級) return;
+    var 日 = new Date(週一.getTime() + (c.星期 - 1) * 86400000);
+    cal.createEvent(
+      班級 + ' 第' + c.節次 + '節　' + (進度 || '（見注意事項）'),
+      合成時間_(日, c.開始),
+      合成時間_(日, c.結束),
+      { description: 說明.join('\n') }
+    );
+    建立數++;
+  });
+
+  return 建立數 ? ('已儲存，並排進教學日曆 ' + 建立數 + ' 節') : '已儲存（課表裡找不到這個班的課）';
 }
 
 

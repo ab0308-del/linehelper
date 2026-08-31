@@ -98,7 +98,7 @@ function 處理事件_(event) {
     lineReply_(event.replyToken, 組出校內行事曆文字_(new Date(), true));
     return;
   }
-  if (輸入文字 && /^(課表|今天課表|自然課)$/.test(輸入文字.trim())) {
+  if (輸入文字 && /^(課表|今天課表|今日課表)$/.test(輸入文字.trim())) {
     lineReply_(event.replyToken, 組出今日課表_());
     return;
   }
