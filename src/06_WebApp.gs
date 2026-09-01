@@ -40,8 +40,33 @@ function 顯示儀表板網址() {
     Logger.log('還沒有部署網頁應用程式，請先部署。');
     return;
   }
+
+  // 在編輯器執行時，getUrl() 會回傳開發用的 /dev 網址，
+  // 那個只有你本人登入時打得開，手機上會失敗。
+  if (url.indexOf('/dev') >= 0) {
+    Logger.log('⚠️ 這裡只拿得到 /dev 開發網址，不能拿去用：');
+    Logger.log('   ' + url + '?k=' + 金鑰);
+    Logger.log('');
+    Logger.log('正確的 /exec 網址請用下列任一方式取得：');
+    Logger.log('  1. 在 LINE 打「儀表板」，小幫手會回你正確網址');
+    Logger.log('  2. 或到「部署 → 管理部署作業」複製「網頁應用程式」那一行的網址，');
+    Logger.log('     後面自己接上：?k=' + 金鑰);
+    return;
+  }
+
+  var 完整網址 = url + '?k=' + 金鑰;
   Logger.log('儀表板網址（請加入書籤，不要外流）：');
-  Logger.log(url + '?k=' + 金鑰);
+  Logger.log(完整網址);
+
+  try {
+    var uid = cfg_('MY_USER_ID');
+    if (uid) {
+      linePush_(uid, '🔗 儀表板網址（請加書籤，不要外流）\n' + 完整網址);
+      Logger.log('已一併傳到你的 LINE。');
+    }
+  } catch (e) {
+    Logger.log('（傳到 LINE 失敗：' + (e.message || e) + '）');
+  }
 }
 
 

@@ -17,7 +17,11 @@ var 節次時間 = {
   7: ['14:50', '15:30']
 };
 
-/** 課表：[星期(1=一), 節次, 班級] */
+/**
+ * 課表範例：[星期(1=一), 節次, 班級]
+ * 請改成你自己的課表，或執行「建立課表」後直接在試算表的「課表」分頁編輯。
+ * 班級名稱寫成「O年O班」，程式才推得出「301」這種代號寫法。
+ */
 var 預設課表 = [
   [1, 1, '三年一班'], [1, 2, '三年二班'],
   [3, 3, '三年一班'], [3, 4, '三年二班'],
@@ -171,6 +175,7 @@ function 取得教學面板_() {
 
 /** 給儀表板用：儲存某班本週進度 */
 function saveProgress(班級, 進度, 注意事項) {
+  班級 = 正規化班級_(班級);
   var sh = 確保進度分頁_();
   var 週一字串 = 格式化_(本週週一_(new Date()), 'yyyy-MM-dd');
 
@@ -248,46 +253,112 @@ function 同步進度到日曆_(班級, 進度, 注意事項) {
 /* ---------- 教學日曆設定 ---------- */
 
 /**
- * 【安裝用】列出你所有的日曆與 ID，找出你的教學專用日曆那一個。
+ * 【安裝用】列出你所有的日曆與 ID，找出你的教學專用日曆。
  */
 function 列出我的日曆() {
   CalendarApp.getAllCalendars().forEach(function (c) {
     Logger.log(c.getName() + '  →  ' + c.getId());
   });
   Logger.log('---');
-  Logger.log('把教學專用日曆那個 ID 複製起來，執行「設定教學日曆」時貼進去。');
+  Logger.log('把教學日曆那個 ID 複製起來，執行「設定教學日曆」時貼進去。');
 }
 
 /**
  * 【安裝用】設定教學專用日曆。
- * 把上面查到的 ID 貼進 idHere 再執行。
+ * 直接把日曆名稱填進去就好，不用找那串很長的 ID。
+ * （抄 ID 貼進來也行，兩種都認）
  */
 function 設定教學日曆() {
-  var idHere = '貼上你的教學日曆ID';
+  var 日曆名稱 = '教學日曆';   // ← 改成你在 Google 日曆建的那個名稱
 
-  if (idHere.indexOf('貼上') === 0) {
-    Logger.log('請先把日曆 ID 貼進 idHere，再執行一次。');
-    return;
+  var cal = null;
+  var 同名 = CalendarApp.getCalendarsByName(日曆名稱.trim());
+  if (同名 && 同名.length) {
+    cal = 同名[0];
+    if (同名.length > 1) Logger.log('❗ 有 ' + 同名.length + ' 個同名日曆，用了第一個。');
+  } else {
+    try { cal = CalendarApp.getCalendarById(日曆名稱.trim()); } catch (e) { cal = null; }
   }
-  var cal = CalendarApp.getCalendarById(idHere.trim());
+
   if (!cal) {
-    Logger.log('找不到這個日曆，請確認 ID 是否正確。');
+    Logger.log('❌ 找不到「' + 日曆名稱 + '」。');
+    Logger.log('請執行「列出我的日曆」看正確名稱，名稱要一字不差（含空白）。');
     return;
   }
-  setCfg_('CALENDAR_ID_TEACH', idHere.trim());
+
+  setCfg_('CALENDAR_ID_TEACH', cal.getId());
   Logger.log('✅ 教學日曆已設定為：' + cal.getName());
+  Logger.log('   ID：' + cal.getId());
+  Logger.log('');
+  Logger.log('接下來到儀表板把有寫進度的班級都重按一次「儲存」，就會補排進日曆。');
 }
 
 
-/** 組出今日課表文字（LINE 用） */
-function 組出今日課表_() {
-  var 教學 = 取得教學面板_();
-  if (!教學) return '還沒有建立課表，請先在編輯器執行「建立課表」。';
-  if (!教學.今日.length) return '🔬 今天沒有課，好好休息 ☕';
+/* ---------- 班級名稱正規化 ---------- */
 
-  var 行 = ['🔬 今天的' + 教學科目 + '課'];
-  教學.今日.forEach(function (c) {
-    行.push('　• ' + c.節次 + ' ' + c.時間 + '　' + c.班級);
+var 中文數字對照 = { '一': 1, '二': 2, '三': 3, '四': 4, '五': 5,
+                     '六': 6, '七': 7, '八': 8, '九': 9, '十': 10 };
+var 數字轉中文 = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
+
+function 轉數字_(s) {
+  if (中文數字對照[s]) return 中文數字對照[s];
+  var n = Number(s);
+  return isNaN(n) ? 0 : n;
+}
+
+/** 課表裡有哪些班級 */
+function 班級清單_() {
+  var 見過 = {}, 清單 = [];
+  讀取課表_().forEach(function (c) {
+    if (!見過[c.班級]) { 見過[c.班級] = true; 清單.push(c.班級); }
   });
-  return 行.join('\n');
+  return 清單;
+}
+
+/**
+ * 從正式名稱推出所有可能的寫法。
+ * 「三年二班」→ 三年二班、302、3年2班、3年二班、三年2班
+ */
+function 班級別名_(名稱) {
+  var m = String(名稱).match(/^([一二三四五六七八九\d])年([一二三四五六七八九十\d]+)班$/);
+  if (!m) return [String(名稱)];
+
+  var 年 = 轉數字_(m[1]);
+  var 班 = 轉數字_(m[2]);
+  if (!年 || !班) return [String(名稱)];
+
+  var 年中 = 數字轉中文[年] || 年;
+  var 班中 = 數字轉中文[班] || 班;
+  var 代號 = '' + 年 + (班 < 10 ? '0' : '') + 班;      // 三年二班 → 302
+
+  return [
+    String(名稱), 代號,
+    年 + '年' + 班 + '班', 年 + '年' + 班中 + '班',
+    年中 + '年' + 班 + '班', 年中 + '年' + 班中 + '班'
+  ];
+}
+
+/**
+ * 把使用者隨口講的班級（402、4年2班…）對回課表裡的正式名稱。
+ * 對不到就原樣回傳。
+ */
+function 正規化班級_(輸入) {
+  var s = String(輸入 || '').trim();
+  if (!s) return '';
+
+  var 清單 = 班級清單_();
+  for (var i = 0; i < 清單.length; i++) {
+    if (班級別名_(清單[i]).indexOf(s) >= 0) return 清單[i];
+  }
+  return s;
+}
+
+/** 給 Gemini 看的班級對照說明 */
+function 班級對照說明_() {
+  var 清單 = 班級清單_();
+  if (!清單.length) return '';
+  return 清單.map(function (n) {
+    var a = 班級別名_(n);
+    return a[0] + '（也可能被寫成 ' + a[1] + '）';
+  }).join('、');
 }

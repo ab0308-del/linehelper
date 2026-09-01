@@ -94,6 +94,15 @@ function 處理事件_(event) {
     return;
   }
 
+  if (輸入文字 && /^(儀表板|網址|連結)$/.test(輸入文字.trim())) {
+    var k = cfg_('WEB_KEY');
+    var u = ScriptApp.getService().getUrl();
+    lineReply_(event.replyToken, (u && k) ?
+      ('🔗 儀表板網址（不要外流）\n' + u + '?k=' + k) :
+      '還沒有儀表板網址，請先在編輯器執行「顯示儀表板網址」。');
+    return;
+  }
+
   if (輸入文字 && /^(學校|校內|本週學校|學校行事曆)$/.test(輸入文字.trim())) {
     lineReply_(event.replyToken, 組出校內行事曆文字_(new Date(), true));
     return;
