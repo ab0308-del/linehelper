@@ -89,12 +89,12 @@ function 組出每日簡報_(基準日) {
     行.push('　（讀取待辦失敗：' + (err.message || err) + '）');
   }
 
-  /* 今日課表 */
+  /* 今日自然課 */
   try {
     var 課 = 當日課表_(起);
     if (課.length) {
       行.push('');
-      行.push('🔬 ' + 格式化_(起, 'M/d') + ' 的課');
+      行.push('🔬 ' + 格式化_(起, 'M/d') + ' 的' + 教學科目 + '課');
       課.forEach(function (c) {
         行.push('　• 第' + c.節次 + '節 ' + c.開始 + '–' + c.結束 + '　' + c.班級);
       });
@@ -113,6 +113,63 @@ function 組出每日簡報_(基準日) {
   行.push('');
   行.push('今天也順順的 💪');
   return 行.join('\n');
+}
+
+
+/**
+ * 在自己的日曆裡找某件事（導護、開會、研習…）。
+ * 把前後幾個月的行程標題整理成清單交給 Gemini 看，所以就算日曆寫「和平樓導護工作」
+ * 而你問「導護」，意思對得上就找得到，不必一字不差。
+ */
+var 找行程往前天數 = 60;
+var 找行程往後天數 = 200;
+
+function 回答我的行事曆_(問題, 關鍵字) {
+  var 今天 = new Date();
+  var 起 = new Date(今天.getFullYear(), 今天.getMonth(), 今天.getDate() - 找行程往前天數);
+  var 訖 = new Date(今天.getFullYear(), 今天.getMonth(), 今天.getDate() + 找行程往後天數);
+  var kw = String(關鍵字 || '').trim();
+
+  var 列 = [];
+  CalendarApp.getAllOwnedCalendars().forEach(function (cal) {
+    var 日曆名 = cal.getName();
+    cal.getEvents(起, 訖).forEach(function (ev) {
+      var 標題 = ev.getTitle();
+      // 儀表板進度同步出來的「三年二班 第3節　…」每週十幾筆，跟關鍵字無關就略過，免得清單太長
+      if (/^\S+ 第\d+節　/.test(標題) && !(kw && 標題.indexOf(kw) >= 0)) return;
+
+      var s = ev.getStartTime();
+      var 時間 = ev.isAllDayEvent() ? '全天' :
+        格式化_(s, 'HH:mm') + '-' + 格式化_(ev.getEndTime(), 'HH:mm');
+      列.push({ t: s.getTime(), 行: 格式化_(s, 'yyyy-MM-dd (EEE)') + ' ' + 時間 + '｜' + 標題 + '｜' + 日曆名 });
+    });
+  });
+  列.sort(function (a, b) { return a.t - b.t; });
+
+  if (!列.length) return '📅 前後幾個月的日曆裡都沒有行程，查不到喔。';
+
+  var 符合數 = kw ? 列.filter(function (x) { return x.行.indexOf(kw) >= 0; }).length : 0;
+
+  var 提示 = [
+    '你是國小老師的助理。下面是老師 Google 日曆從 ' + 格式化_(起, 'M/d') + ' 到 ' + 格式化_(訖, 'M/d') + ' 的行程，',
+    '每一列的格式是「日期 時間｜標題｜所在日曆」。',
+    '',
+    '今天是 ' + 格式化_(今天, 'yyyy年M月d日 (EEE)') + '。',
+    '',
+    '請根據資料回答老師的問題，規則：',
+    '1. 用繁體中文、口語、簡短。',
+    '2. 找到的行程要講出日期（含星期）和時間；有好幾次就依時間先後列出，並分清楚哪些已經過了、哪些還沒到。',
+    '3. 日曆標題的寫法可能跟老師問的不一樣（例如問「導護」，日曆寫「和平樓導護工作」），意思相同就算。',
+    '4. 資料裡真的沒有就直說查不到，絕對不要自己編。',
+    '',
+    '老師的問題：' + 問題,
+    kw ? ('（關鍵字「' + kw + '」，標題直接含這個詞的有 ' + 符合數 + ' 筆）') : '',
+    '',
+    '---以下是日曆資料---',
+    列.map(function (x) { return x.行; }).join('\n')
+  ].join('\n');
+
+  return '📅 ' + 問Gemini文字_(提示);
 }
 
 

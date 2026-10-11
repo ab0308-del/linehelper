@@ -121,6 +121,11 @@ function 處理事件_(event) {
     return;
   }
   if (結果.intent === '問行程') {
+    // 在找某件事（導護、開會、研習…）→ 翻前後幾個月的日曆交給 Gemini 回答
+    if (String(結果.查詢關鍵字 || '').trim()) {
+      lineReply_(event.replyToken, 回答我的行事曆_(原文, 結果.查詢關鍵字));
+      return;
+    }
     var 起 = 解析時間_(結果.查詢起日) || new Date();
     var 訖 = 解析時間_(結果.查詢訖日) || 起;
     lineReply_(event.replyToken, 組出區間行程_(起, 訖));
